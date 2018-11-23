@@ -1,6 +1,7 @@
 # customize-cra
 
-This project piggybacks on [`react-app-rewired`](https://github.com/timarney/react-app-rewired/) to customize create-react-app for version 2.0 and higher.
+This project provides a set of utilities to customize the Create React App v2
+configurations leveraging [`react-app-rewired`](https://github.com/timarney/react-app-rewired/) core functionalities.
 
 ## How to install
 
@@ -35,7 +36,8 @@ The functions documented below can be imported by name, and used in your `config
 
 ### addBabelPlugin(plugin)
 
-Adds a babel plugin. Whatever you pass for `plugin` will be added to Babel's `plugins` array. Consult their docs for more info.
+Adds a babel plugin. Whatever you pass for `plugin` will be added to Babel's `plugins` array. Consult their docs for more info.  
+Note that this rewirer will not add the plugin to the `yarn test`'s Babel configuration. See `useBabelRc()` to learn more.
 
 ### addBabelPlugins(plugins)
 
@@ -44,7 +46,11 @@ A simple helper that calls `addBabelPlugin` for each plugin you pass in here. Ma
 ```js
 module.exports = override(
   disableEsLint(),
-  ...addBabelPlugins("polished", "emotion", "babel-plugin-transform-do-expressions"),
+  ...addBabelPlugins(
+    "polished",
+    "emotion",
+    "babel-plugin-transform-do-expressions"
+  ),
   fixBabelImports("lodash", {
     libraryDirectory: "",
     camel2DashComponentName: false
@@ -64,21 +70,74 @@ Adds the [babel-plugin-import plugin](https://www.npmjs.com/package/babel-plugin
 
 Add decorators in legacy mode. Be sure to have `@babel/plugin-proposal-decorators` installed.
 
+### useBabelRc()
+
+Use a .babelrc file for Babel configuration.
+
 ### disableEsLint()
 
 Does what it says. You may need this along with `addDecoratorsLegacy` in order to get decorators and exports to parse together.
 
+If you want use `@babel/plugin-proposal-decorators` with EsLint, you can enable `useEslintRc`, described below, with the follow configuration in your `.eslintrc` or `package.json`:
+
+```json
+{
+  "extends": "react-app",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "legacyDecorators": true
+    }
+  }
+}
+```
+
 ### useEslintRc()
 
-Causes your .eslintrc file to be used, rather than the config cra ships with.
+Causes your .eslintrc file to be used, rather than the config CRA ships with.
+
+### enableEslintTypescript()
+
+Updates Webpack eslint-loader to lint both .js(x) and .ts(x) files and show linting errors/warnings in console.
 
 ### addWebpackAlias(alias)
 
 Adds the provided alias info into webpack's alias section. Pass an object literal with as many entries as you'd like, and the whole object will be merged in.
 
-### addBundleVisualizer(options)
+### addBundleVisualizer(options, behindFlag = false)
 
-Adds the bundle visualizer plugin to your webpack config. Be sure to have `webpack-bundle-analyzer` installed. By default, the options passed to the plugin will be
+Adds the bundle visualizer plugin to your webpack config. Be sure to have `webpack-bundle-analyzer` installed. By default, the options passed to the plugin will be:
+
+```json
+{
+  "analyzerMode": "static",
+  "reportFilename": "report.html"
+}
+```
+
+You can hide this plugin behind a command line flag (`--analyze`) by passing `true` as second argument.
+
+```js
+addBundleVisualizer({}, true);
+```
+
+### useBabelRc()
+
+Causes your .babelrc (or .babelrc.js) file to be used, this is especially useful
+if you'd rather override the CRA babel configuration and make sure it is consumed
+both by `yarn start` and `yarn test` (along with `yarn build`).
+
+```js
+// config-overrides.js
+module.exports = override(
+  useBabelRc()
+);
+
+// .babelrc
+{
+  "presets": ["babel-preset-react-app"],
+  "plugins": ["emotion"]
+}
+```
 
 ```js
 {
@@ -94,8 +153,54 @@ which can be overridden with the (optional) options argument.
 Adjusts Workbox configuration. Pass a function which will be called with the current Workbox configuration, in which you can mutate the config object as needed. See below for an example.
 
 ```js
-adjustWorkbox(wb => Object.assign(wb, { skipWaiting: true, exclude: (wb.exclude || []).concat("index.html") }));
+adjustWorkbox(wb =>
+  Object.assign(wb, {
+    skipWaiting: true,
+    exclude: (wb.exclude || []).concat("index.html")
+  })
+);
 ```
+
+### addLessLoader(loaderOptions)
+
+First, install `less` and `less-loader` packages:
+
+```bash
+yarn add less
+yarn add --dev less-loader
+```
+
+or:
+
+```bash
+npm i less
+npm i -D less-loader
+```
+
+After it's done, call `addLessLoader` in `override` like below:
+
+```js
+const { addLessLoader } = require("customize-cra");
+
+module.exports = override(addLessLoader(loaderOptions));
+```
+
+`loaderOptions` is optional. If you have Less specific options, you can pass to it. For example:
+
+```js
+const { addLessLoader } = require("customize-cra");
+
+module.exports = override(
+  addLessLoader({
+    strictMath: true,
+    noIeCompat: true
+  })
+);
+```
+
+Check [Less document](http://lesscss.org/usage/#command-line-usage-options) for all available specific options you can use.
+
+Once `less-loader` is enabled, you can import `.less` file in your project.
 
 ## Using the plugins
 
@@ -104,18 +209,65 @@ To use these plugins, import the `override` function, and call it with whatever 
 For example
 
 ```js
-const { override, addDecoratorsLegacy, disableEsLint, addBundleVisualizer, addWebpackAlias, adjustWorkbox } = require("customize-cra");
+const {
+  override,
+  addDecoratorsLegacy,
+  disableEsLint,
+  addBundleVisualizer,
+  addWebpackAlias,
+  adjustWorkbox
+} = require("customize-cra");
 const path = require("path");
 
 module.exports = override(
   addDecoratorsLegacy(),
   disableEsLint(),
   process.env.BUNDLE_VISUALIZE == 1 && addBundleVisualizer(),
-  addWebpackAlias({ ["ag-grid-react$"]: path.resolve(__dirname, "src/shared/agGridWrapper.js") }),
-  adjustWorkbox(wb => Object.assign(wb, { skipWaiting: true, exclude: (wb.exclude || []).concat("index.html") }))
+  addWebpackAlias({
+    ["ag-grid-react$"]: path.resolve(__dirname, "src/shared/agGridWrapper.js")
+  }),
+  adjustWorkbox(wb =>
+    Object.assign(wb, {
+      skipWaiting: true,
+      exclude: (wb.exclude || []).concat("index.html")
+    })
+  )
 );
 ```
 
 ## MobX Users
 
 If you want CRA 2 to work with MobX, use the `addDecoratorsLegacy` and `disableEsLint`.
+
+## Override dev server configuration
+
+To override the webpack dev server configuration, you can use the `overrideDevServer` utility:
+
+```js
+const {
+  override,
+  disableEsLint,
+  overrideDevServer,
+  watchAll
+} = require("customize-cra");
+
+module.exports = {
+  webpack: override(
+    // usual webpack plugin
+    disableEsLint()
+  ),
+  devServer: overrideDevServer(
+    // dev server plugin
+    watchAll()
+  )
+};
+```
+
+### watchAll()
+
+When applied, CRA will watch all the project's files, included `node_modules`.  
+To use it, just apply it and run the dev server with `yarn start --watch-all`.
+
+```js
+watchAll();
+```
